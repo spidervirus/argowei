@@ -65,12 +65,10 @@ impl HostnameResolver for MdnsResolver {
 /// `annas-iphone.local` is called `annas-iphone`.
 fn clean(name: &str, target: &Target) -> Option<String> {
     let trimmed = name.trim_end_matches('.');
-    let host = if trimmed.len() >= 6 && trimmed[trimmed.len() - 6..].eq_ignore_ascii_case(".local")
-    {
-        &trimmed[..trimmed.len() - 6]
-    } else {
-        trimmed
-    };
+    let host = trimmed
+        .rsplit_once('.')
+        .filter(|(_, domain)| domain.eq_ignore_ascii_case("local"))
+        .map_or(trimmed, |(host, _)| host);
     sanitize_name(host, Some(target.ip))
 }
 
@@ -112,6 +110,14 @@ mod tests {
         assert_eq!(clean("localhost.local", &t), None);
         assert_eq!(clean("192-168-1-5.local", &t), None);
         assert_eq!(clean(".local", &t), None);
+    }
+
+    #[test]
+    fn keeps_utf8_hostnames_with_or_without_the_local_suffix() {
+        let t = target("192.168.1.5");
+
+        assert_eq!(clean("Büro.LoCaL.", &t).as_deref(), Some("Büro"));
+        assert_eq!(clean("Bürolan", &t).as_deref(), Some("Bürolan"));
     }
 
     #[test]

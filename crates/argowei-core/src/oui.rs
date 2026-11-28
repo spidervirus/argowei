@@ -92,7 +92,8 @@ pub struct MacInfo<'a> {
 
 /// Looks up a MAC address in the embedded IEEE registry. Accepts the usual
 /// notations (`aa:bb:cc:dd:ee:ff`, `AA-BB-...`, `aabb.ccdd.eeff`, bare hex).
-/// Unparseable input yields no vendor and no flags.
+/// Surrounding ASCII whitespace is ignored. Unparseable input yields no
+/// vendor and no flags.
 pub fn lookup(mac: &str) -> MacInfo<'static> {
     static TABLE: OnceLock<OuiTable<'static>> = OnceLock::new();
     TABLE.get_or_init(|| OuiTable::parse(EMBEDDED)).lookup(mac)
@@ -100,8 +101,9 @@ pub fn lookup(mac: &str) -> MacInfo<'static> {
 
 fn parse_mac(mac: &str) -> Option<[u8; 6]> {
     let hex: Vec<u8> = mac
+        .trim_ascii()
         .bytes()
-        .filter(|b| !matches!(b, b':' | b'-' | b'.') && !b.is_ascii_whitespace())
+        .filter(|b| !matches!(b, b':' | b'-' | b'.'))
         .collect();
     if hex.len() != 12 || !hex.iter().all(u8::is_ascii_hexdigit) {
         return None;
@@ -183,7 +185,13 @@ ABCDEF\t
     fn invalid_input_is_neither_vendor_nor_randomized() {
         let table = OuiTable::parse(FIXTURE);
 
-        for mac in ["", "b8:27:eb", "zz:27:eb:12:34:56", "b8:27:eb:12:34:56:78"] {
+        for mac in [
+            "",
+            "b8:27:eb",
+            "zz:27:eb:12:34:56",
+            "b8:27:eb:12:34:56:78",
+            "b8:27:eb:12:34:\t56",
+        ] {
             assert_eq!(table.lookup(mac), MacInfo::default(), "{mac:?}");
         }
     }
